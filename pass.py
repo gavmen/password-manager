@@ -9,6 +9,7 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.fernet import Fernet, InvalidToken
+from cryptography.fernet import InvalidToken
 
 
 
@@ -83,23 +84,41 @@ def generate_password(length=12):
     password = ''.join(random.choice(characters) for i in range(length))
     return password
 
-def main():
-    while True:
-        key = get_master_key()
+def delete_password(service, password_dict, key):
+    if service in password_dict:
+        del password_dict[service]
+        save_passwords(encrypt_data(json.dumps(password_dict), key))
+        print(f"Password for {service} has been deleted.")
+    else:
+        print(f"No password found for {service}.")
 
-        encrypted_passwords = load_encrypted_data()
-        if encrypted_passwords:
+def set_master_password():
+    while True:
+        master_password = getpass('Set your master password: ')
+        password_confirm = getpass('Confirm your master password: ')
+        if master_password == password_confirm:
+            return master_password
+        else:
+            print("Passwords do not match. Please try again.")
+            
+def main():
+    encrypted_passwords = load_encrypted_data()
+    if encrypted_passwords:
+        while True:
+            key = get_master_key()
             try:
                 password_dict = json.loads(decrypt_data(encrypted_passwords, key))
                 break
             except (InvalidToken, ValueError):
                 print("Invalid master password. Please try again.")
-        else:
-            password_dict = {} 
-            break
+    else:
+        master_password = set_master_password()
+        key = generate_key(master_password)
+        password_dict = {}
+        save_passwords(encrypt_data(json.dumps(password_dict), key))
 
     while True:
-        print("\nOptions: add, get, quit")
+        print("\nOptions: add, get, list, delete, quit")
         action = input("What would you like to do? ").strip().lower()
         if action == "add":
             service = input("Enter the service name: ")
@@ -123,11 +142,23 @@ def main():
             retrieved_password = retrieve_password(service, password_dict, key)
             if retrieved_password:
                 print(f"The password for {service} is: {retrieved_password}")
+        elif action == "list":
+            print("Services stored:")
+            for service in password_dict.keys():
+                print(service)
+        elif action == "delete":
+            service = input("Enter the service name to delete: ")
+            if service in password_dict:
+                del password_dict[service]
+                save_passwords(encrypt_data(json.dumps(password_dict), key))
+                print(f"Password for {service} has been deleted.")
+            else:
+                print(f"No password found for {service}.")
         elif action == "quit":
             print("Exiting password manager.")
             break
         else:
-            print("Invalid option. Try 'add', 'get', or 'quit'.")
+            print("Invalid option. Try 'add', 'get', 'list', 'delete', or 'quit'.")
 
 if __name__ == '__main__':
     main()
